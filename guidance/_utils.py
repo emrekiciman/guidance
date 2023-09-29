@@ -7,7 +7,7 @@ import asyncio
 import queue
 import ast
 import types
-
+import itertools
 
 class TextRange:
     def __init__(self, start, end, lm):
@@ -86,6 +86,7 @@ class _Rewrite(ast.NodeTransformer):
     def visit_Constant(self, node):
         # print(node)
         if isinstance(node.value, str) and node.lineno < node.end_lineno:
+            self.start_counts[node.lineno-1] += 1
             start_line = self.source_lines[node.lineno-1]
             start_string = start_line[node.col_offset:]
             
@@ -104,10 +105,12 @@ class _Rewrite(ast.NodeTransformer):
                 fail = False
                 new_lines = []
                 for i,line in enumerate(lines):
-                    if line.startswith(indent):
-                        new_lines.append(line[len(indent):])
-                    elif (i == 0 and line.endswith("\\")) or line == "":
+                    if (i == 0 and (self.start_counts[node.lineno-1] > 1 or not start_line.endswith("\\"))) or line == "":
                         new_lines.append(line)
+                    elif line.startswith(indent):
+                        new_lines.append(line[len(indent):])
+                    # elif (i == 0 and line.endswith("\\")) or line == "":
+                    #     new_lines.append(line)
                     else:
                         fail = True
                         break
@@ -128,6 +131,7 @@ def strip_multiline_string_indents(f):
     r = _Rewrite()
     r.source_lines = source.split("\n")
     r.indentation = [None for l in r.source_lines]
+    r.start_counts = [0 for l in r.source_lines]
     # r._avoid_backslashes = True
     new_ast = r.visit(old_ast)
     new_code_obj = compile(new_ast, old_code_obj.co_filename, 'exec')
@@ -231,6 +235,107 @@ class AsyncIter():
     async def __aiter__(self):    
         for item in self.items:    
             yield item
+
+class TrieOld(object):
+    __slots__ = ('children', 'value', 'match_version', 'match', 'partial_match')
+
+    def __init__(self, strings=None, values=None):
+        self.children = {}
+        self.value = []
+        self.match_version = -1
+        self.match = False
+        self.partial_match = False
+
+        if strings is not None:
+            for i,s in enumerate(strings):
+                self.insert(s, None if values is None else values[i])
+
+    def insert(self, s, value):
+        if len(s) == 0:
+            self.value.append(value)
+        else:
+            first_char = s[0]
+            if first_char not in self.children:
+                self.children[first_char] = Trie()
+            self.children[first_char].insert(s[1:], value)
+
+    def values(self, prefix):
+        if prefix == "":
+            return [self.value] + list(itertools.chain.from_iterable(self.children[k].values(prefix) for k in self.children))
+        else:
+            return self.children[prefix[0]].values(prefix[1:])
+
+    def __setitem__(self, key, value):
+        if len(key) == 0:
+            self.value = value
+        else:
+            if key[0] not in self.children:
+                self.children[key[0]] = Trie()
+            self.children[key[0]].__setitem__(key[1:], value)
+
+    def __contains__(self, key):
+        return self.__getitem__(key) is not None
+
+    def __getitem__(self, key):
+        if len(key) == 0:
+            return self.value
+        elif key[0] in self.children:
+            self.children[key[0]].__getitem__(key[1:])
+        else:
+            return None
+
+class Trie(object):
+    __slots__ = ('children', 'value', 'match_version', 'match', 'partial_match', 'parent', 'flag')
+
+    def __init__(self, strings=None, values=None, parent=None):
+        self.children = {}
+        self.value = None
+        self.match_version = -1
+        self.match = False
+        self.partial_match = False
+        self.parent = parent
+        self.flag = None # a spot for user code to store state
+
+        if strings is not None:
+            for i,s in enumerate(strings):
+                self.insert(s, None if values is None else values[i])
+
+    def insert(self, s, value):
+        if len(s) == 0:
+            self.value = value
+        else:
+            first_char = s[0]
+            if first_char not in self.children:
+                self.children[first_char] = Trie(parent=self)
+            self.children[first_char].insert(s[1:], value)
+
+    def values(self, prefix):
+        if prefix == "":
+            sub_values = list(itertools.chain.from_iterable(self.children[k].values(prefix) for k in self.children))
+            if self.value is not None:
+                sub_values.append(self.value)
+            return sub_values
+        else:
+            return self.children[prefix[0]].values(prefix[1:])
+
+    def __setitem__(self, key, value):
+        if len(key) == 0:
+            self.value = value
+        else:
+            if key[0] not in self.children:
+                self.children[key[0]] = Trie(parent=self)
+            self.children[key[0]].__setitem__(key[1:], value)
+
+    def __contains__(self, key):
+        return self.__getitem__(key) is not None
+
+    def __getitem__(self, key):
+        if len(key) == 0:
+            return self
+        elif key[0] in self.children:
+            return self.children[key[0]].__getitem__(key[1:])
+        else:
+            return None
 
 class ContentCapture:
     def __init__(self, variable_stack, hidden=False):

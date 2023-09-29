@@ -6,42 +6,55 @@ import copy
 import json
 import textwrap
 
-class LM:
+class Endpoint:
+    '''This keeps state that is shared among all models using the same endpoint session.'''
+    pass
+
+class Model:
 
     tag_start = "{{G|"
     tag_end = "|G}}"
-    _call_queue = {}
+    _call_pool = {}
 
-    def __init__(self, model, caching=True):
-        self.model = model
+    def __init__(self, echo=True):
+
+        # while models are logically immutable, they can share some mutable caching state to save computation
+        self._cache_state  = {}
+        
+        self.echo = echo
         self._state = ""
         self._children = []
         self._event_queue = None
         self._event_parent = None
         self._silent = None
-        # self._inplace = None
         self._variables = {}
-        self._caching = caching
-        self._endpoint_session = None
-        self.endpoint = None
         self.instance__enter__ = []
         self.instance__exit__ = []
+        self._streaming = False
 
         self._tag_pattern = re.compile(re.escape(self.tag_start) + r"([^\|]+)" + re.escape(self.tag_end))
 
+    def __call__(self, pattern=None, max_tokens=100, n=1, top_p=1, temperature=0.0, ensure_bos_token=True):
+        pass # meant to be overriden by subclasses
+
     def get(self, key, default=None):
         return self._variables.get(key, default)
+
+    def set(self, key, value):
+        copy = self.copy()
+        copy._variables[key] = value
+        return copy
     
     def remove(self, key):
         if key in self._variables:
             del self._variables[key]
 
-    def get_endpoint_session(self):
-        return self._endpoint_session_call
+    # def get_endpoint_session(self):
+    #     return self._endpoint_session_call
     
-    def _endpoint_session_call(self, *args, **kwargs):
-        kwargs["caching"] = self._caching
-        return self._endpoint_session(*args, **kwargs)
+    # def _endpoint_session_call(self, *args, **kwargs):
+    #     kwargs["caching"] = self._caching
+    #     return self._endpoint_session(*args, **kwargs)
 
     def _html(self):
         display_out = html.escape(self._state)
@@ -56,8 +69,7 @@ class LM:
         if self._event_parent is not None:
             self._event_parent._send_to_event_queue(value)
 
-    @property
-    def silent(self):
+    def is_silent(self):
         if self._silent is not None:
             return self._silent
         return False
@@ -72,10 +84,10 @@ class LM:
         self._children.append(new_lm)
         return new_lm
     
-    def append(self, value, force_silent=False):
+    def _inplace_append(self, value, force_silent=False):
         """This is the base way to add content to the LM object."""
         self._state += str(value)
-        if not self.silent and not force_silent:
+        if self.echo and not self.is_silent() and not force_silent:
             clear_output(wait=True)
             display(HTML(self._html()))
         self._send_to_event_queue(self)
@@ -109,12 +121,12 @@ class LM:
         lm.suffix = ""
         for i,part in enumerate(parts):
             # print(is_id, part)
-            if  i < len(parts) - 1:
+            if i < len(parts) - 1:
                 lm.suffix = parts[i+1]
             if is_id:
-                lm = self._call_queue[part](lm)
-            else:
-                lm = lm.append(part)
+                lm = self._call_pool[part](lm)
+            elif part != "":
+                lm = lm._inplace_append(part)
             is_id = not is_id
         return lm
     
@@ -124,8 +136,8 @@ class LM:
     def __len__(self):
         return len(str(self))
     
-    def __call__(self, s, **kwargs):
-        return self.append(s, **kwargs)
+    # def __call__(self, s, **kwargs):
+    #     return self.append(s, **kwargs)
     
     def __setitem__(self, key, value):
         self._variables[key] = value
@@ -147,20 +159,20 @@ class LM:
     # def __call__(self, s):
     #     return self + s
     
-    def get_encoded(self, s):
-        return self.endpoint.encode(s)
+    # def get_encoded(self, s):
+    #     return self.endpoint.encode(s)
     
-    def get_decoded(self, s):
-        return self.endpoint.decode(s)
+    # def get_decoded(self, s):
+    #     return self.endpoint.decode(s)
     
-    def get_id_to_token(self, id):
-        return self.endpoint.id_to_token(id)
+    # def get_id_to_token(self, id):
+    #     return self.endpoint.id_to_token(id)
 
-    def get_token_to_id(self, token):
-        return self.endpoint.token_to_id(token)
+    # def get_token_to_id(self, token):
+    #     return self.endpoint.token_to_id(token)
     
     def get_cache(self):
-        return self.endpoint.cache
+        return self.engine.cache
     
     def tool_def(self, functions):
 
@@ -204,7 +216,7 @@ type {function['name']} = (_: {{"""
         return self
 
 
-class ChatLM(LM):
+class Chat(Model):
     
     def get_role_start(self, role_name, **kwargs):
         return "<|im_start|>"+role_name+"".join([f' {k}="{v}"' for k,v in kwargs.items()])+"\n"
