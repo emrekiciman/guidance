@@ -28,29 +28,29 @@ class LLM(metaclass=LLMMeta):
         self.chat_mode = False  # by default models are not in role-based chat mode
         self.model_name = "unknown"
 
-        # these should all start with the @ symbol and are variables programs can use when running with this LLM
-        self.tool_def = guidance("""
-# Tools
-
-{{#if len(functions) > 0~}}
-## functions
-
-namespace functions {
-
-{{#each functions item_name="function"~}}
-// {{function.description}}
-type {{function.name}} = (_: {
-{{~#each function.parameters.properties}}
-{{#if contains(this, "description")}}// {{this.description}}
-{{/if~}}
-{{@key}}{{#unless contains(function.parameters.required, @key)}}?{{/unless}}: {{#if contains(this, "enum")}}{{#each this.enum}}"{{this}}"{{#unless @last}} | {{/unless}}{{/each}}{{else}}{{this.type}}{{/if}}{{#unless @last}},{{/unless}}
-{{~/each}}
-}) => any;
-
-{{/each~}}
-} // namespace functions
-{{~/if~}}""", functions=[])
-        self.function_call_stop_regex = r"\n?\n?```typescript\nfunctions.[^\(]+\(.*?\)```"
+#        # these should all start with the @ symbol and are variables programs can use when running with this LLM
+#        self.tool_def = guidance("""
+## Tools
+#
+#{{#if len(functions) > 0~}}
+### functions
+#
+#namespace functions {
+#
+#{{#each functions item_name="function"~}}
+#// {{function.description}}
+#type {{function.name}} = (_: {
+#{{~#each function.parameters.properties}}
+#{{#if contains(this, "description")}}// {{this.description}}
+#{{/if~}}
+#{{@key}}{{#unless contains(function.parameters.required, @key)}}?{{/unless}}: {{#if contains(this, "enum")}}{{#each this.enum}}"{{this}}"{{#unless @last}} | {{/unless}}{{/each}}{{else}}{{this.type}}{{/if}}{{#unless @last}},{{/unless}}
+#{{~/each}}
+#}) => any;
+#
+#{{/each~}}
+#} // namespace functions
+#{{~/if~}}""", functions=[])
+#        self.function_call_stop_regex = r"\n?\n?```typescript\nfunctions.[^\(]+\(.*?\)```"
 
     def extract_function_call(self, text):
         m = re.match(r"\n?\n?```typescript\nfunctions.([^\(]+)\((.*?)\)```", text, re.DOTALL)

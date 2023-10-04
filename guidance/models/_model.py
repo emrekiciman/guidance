@@ -159,16 +159,20 @@ class Model:
     # def __call__(self, s):
     #     return self + s
     
-    # def get_encoded(self, s):
+    def get_encoded(self, s):
+        raise NotImplementedError # meant to be overriden by subclasses
     #     return self.endpoint.encode(s)
     
-    # def get_decoded(self, s):
+    def get_decoded(self, s):
+        raise NotImplementedError # meant to be overriden by subclasses
     #     return self.endpoint.decode(s)
     
-    # def get_id_to_token(self, id):
+    def get_id_to_token(self, id):
+        raise NotImplementedError # meant to be overriden by subclasses
     #     return self.endpoint.id_to_token(id)
 
-    # def get_token_to_id(self, token):
+    def get_token_to_id(self, token):
+        raise NotImplementedError # meant to be overriden by subclasses
     #     return self.endpoint.token_to_id(token)
     
     def get_cache(self):
