@@ -376,7 +376,7 @@ def gen_with_tools(lm, name=None, tools=None, stop_on_tool=False, include_tool_c
         to_callables.append(p_to_callable)
     # return patterns
     if 'stop_regex' in kwargs:
-        if isistance(kwargs['stop_regex'], list):
+        if isinstance(kwargs['stop_regex'], list):
             kwargs['stop_regex'].extend(patterns)
         else:
             kwargs['stop_regex']  = [kwargs['stop_regex']] + patterns
