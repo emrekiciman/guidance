@@ -32,6 +32,9 @@ class Model:
         self.instance__exit__ = []
         self._streaming = False
 
+        self.eos_token = None
+        self.supports_patterns = False
+
         self._tag_pattern = re.compile(re.escape(self.tag_start) + r"([^\|]+)" + re.escape(self.tag_end))
 
     def __call__(self, pattern=None, max_tokens=100, n=1, top_p=1, temperature=0.0, ensure_bos_token=True):

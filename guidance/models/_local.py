@@ -32,6 +32,7 @@ class Local(Model):
         self.bos_token = self.tokens[self.bos_token_id]
         self.eos_token_id = eos_token_id if eos_token_id is not None else bos_token_id
         self.eos_token = self.tokens[self.eos_token_id]
+        self.supports_patterns = True
 
         # build a prefix tree of the tokens
         self._token_trie = Trie(tokens, np.arange(len(tokens)))
