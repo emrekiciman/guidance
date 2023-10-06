@@ -77,7 +77,7 @@ class Transformers(Local):
             
         return model, tokenizer
 
-    def _get_logits(self):
+    def _get_logits(self, logit_bias=None):
         '''Computes the logits for the given token state.
         
         This overrides a method from the LocalEngine class that is used to get
@@ -108,6 +108,10 @@ class Transformers(Local):
                 attention_mask=torch.ones(1, past_length + len(new_token_ids)).to(self.device)
             )
 
+            # TODO - apply logit bias if provided
+            # if logit_bias is not None:
+            #     model_out.logits[0, -1, :] += logit_bias
+
             # save the results
             self._cache_state["past_key_values"] = model_out.past_key_values
             cache_token_ids.extend(new_token_ids)
@@ -123,6 +127,19 @@ class Transformers(Local):
     #     if isinstance(self.engine, str):
     #         self.engine = guidance.endpoints.Transformers(engine, **engine_kwargs)
     #     # self._endpoint_session = self.endpoint.session()
+
+    def get_encoded(self, s):
+        return self._orig_tokenizer.encode(s)
+    
+    def get_decoded(self, s):
+        return self._orig_tokenizer.decode(s)
+
+    def get_id_to_token(self, id):
+        return self._orig_tokenizer.convert_ids_to_tokens([id])[0]
+
+    def get_token_to_id(self, token):
+        return self._orig_tokenizer.convert_tokens_to_ids([token])[0]
+
 
 class TransformersChat(Transformers, Chat):
     def __init__(self, *args, **kwargs):

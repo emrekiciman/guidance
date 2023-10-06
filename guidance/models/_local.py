@@ -43,7 +43,7 @@ class Local(Model):
         self._cache_state["cache_token_ids"] = []
         self._cache_state["new_token_ids"] = []
 
-    def _get_logits(self):
+    def _get_logits(self, **model_kwargs):
         '''A fake method designed to be overriden by subclasses.'''
         self._cache_state["cache_token_ids"].extend(self._new_token_ids)
         self.self._new_token_ids = []
@@ -56,17 +56,24 @@ class Local(Model):
         if string.startswith("\n"):
             pass
         trie_pos = self._token_trie
+        ret_longest_so_far_i = None
+        ret_longest_so_far_value = None
         for i,c in enumerate(string):
+            if trie_pos.value is not None:
+                ret_longest_so_far_i = i
+                ret_longest_so_far_value = trie_pos.value
             if c in trie_pos.children:
                 trie_pos = trie_pos.children[c]
             else:
-                return string[:i], trie_pos.value # note that if there are redudant tokens we choose the one stored in the trie
+                return string[:ret_longest_so_far_i], ret_longest_so_far_value
+                #EMK: the line below is buggy -- only works if every internal node of the trie has a value
+                #return string[:i], trie_pos.value # note that if there are redudant tokens we choose the one stored in the trie
         if len(trie_pos.children) == 0:
             return string[:i+1], trie_pos.value
         else:
             return None,None # more than one token can match this string
 
-    def __call__(self, pattern, max_tokens=100, n=1, top_p=1, temperature=0.0, ensure_bos_token=True):
+    def __call__(self, pattern, max_tokens=100, n=1, top_p=1, temperature=0.0, ensure_bos_token=True, **model_kwargs):
         prompt = str(self)
 
         # add the beginning of sequence token if needed
